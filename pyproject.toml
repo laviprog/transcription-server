@@ -30,7 +30,7 @@ worker = [
 ]
 
 dev = [
-    "ruff>=0.14.0"
+    "ruff>=0.16.6"
 ]
 
 [tool.ruff]

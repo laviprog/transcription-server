@@ -3,6 +3,7 @@ from starlette.middleware.cors import CORSMiddleware
 
 import src.database.models  # noqa
 from src.middlewares import LogMiddleware
+
 from .config import settings
 from .exceptions.handlers import setup_exception_handlers
 from .exceptions.responses import error_responses

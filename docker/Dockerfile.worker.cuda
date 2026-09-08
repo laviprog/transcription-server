@@ -16,4 +16,4 @@ RUN uv sync --frozen --no-dev --extra worker
 
 COPY . .
 
-CMD ["uv", "run", "celery", "-A", "src.workers.app:celery_app", "worker", "-l", "INFO", "--concurrency=1", "--pool=solo"]
+CMD ["uv", "run", "--no-dev", "celery", "-A", "src.workers.app:celery_app", "worker", "-l", "INFO", "--concurrency=1", "--pool=solo"]

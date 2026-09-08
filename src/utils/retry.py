@@ -6,7 +6,7 @@ def retry(max_retries: int = 2):
         @functools.wraps(func)
         def wrapper_retry(*args, **kwargs):
             last_exception = None
-            for attempt in range(max_retries):
+            for _ in range(max_retries):
                 try:
                     return func(*args, **kwargs)
                 except Exception as e:

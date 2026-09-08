@@ -1,33 +1,31 @@
 services:
-  speech-postgres:
+  postgres:
     image: postgres:16-alpine
-    container_name: speech-postgres
     environment:
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_DB: ${POSTGRES_NAME}
     ports:
       - "127.0.0.1:5432:5432"
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
     networks:
       - speech-network
-    volumes:
-      - speech-postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}" ]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
       interval: 5s
       timeout: 5s
       retries: 10
     restart: unless-stopped
 
-  speech-redis:
+  redis:
     image: redis:7-alpine
-    container_name: speech-redis
     ports:
       - "127.0.0.1:6379:6379"
+    volumes:
+      - ./data/redis:/data
     networks:
       - speech-network
-    volumes:
-      - speech-redis-data:/data
     healthcheck:
       test: [ "CMD-SHELL", "redis-cli ping || exit 1" ]
       interval: 5s
@@ -39,65 +37,64 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.api
-    image: speech-migrate:latest
-    container_name: speech-migrate
+    image: speech-app:latest
     env_file:
       - .env
     command: [ "uv", "run", "alembic", "upgrade", "head" ]
     networks:
       - speech-network
     depends_on:
-      speech-postgres:
+      postgres:
         condition: service_healthy
     restart: no
 
-  speech-api:
+  app:
     build:
       context: .
       dockerfile: docker/Dockerfile.api
-    image: speech-api:latest
-    container_name: speech-api
+    image: speech-app:latest
     env_file:
       - .env
     ports:
       - "127.0.0.1:8080:8080"
+    volumes:
+      - ./data/transcribe:/srv/transcribe
     networks:
       - speech-network
-    volumes:
-      - transcribe:/srv/transcribe
     environment:
       - TRANSCRIBE_TMP_DIR=/srv/transcribe
     depends_on:
       migrate:
         condition: service_completed_successfully
-      speech-redis:
+      redis:
         condition: service_started
-    # restart: unless-stopped
+    restart: unless-stopped
 
-  speech-celery-worker:
+  worker:
     build:
       context: .
       # dockerfile: docker/Dockerfile.worker.cuda
       dockerfile: docker/Dockerfile.worker
-    image: speech-celery-worker:latest
-    container_name: speech-worker
+    image: speech-worker:latest
     env_file:
       - .env
+    volumes:
+      - ./data/transcribe:/srv/transcribe
     networks:
       - speech-network
-    volumes:
-      - transcribe:/srv/transcribe
     environment:
       - TRANSCRIBE_TMP_DIR=/srv/transcribe
     #  - NVIDIA_VISIBLE_DEVICES=0
     depends_on:
-      speech-postgres:
+      postgres:
         condition: service_healthy
-      speech-redis:
+      redis:
+        condition: service_healthy
+      app:
         condition: service_started
       migrate:
         condition: service_completed_successfully
-    # restart: unless-stopped
+    restart: unless-stopped
     # deploy:
     #   resources:
     #     reservations:
@@ -109,11 +106,4 @@ services:
 networks:
   speech-network:
     name: speech-network
-
-volumes:
-  speech-postgres-data:
-    name: speech-postgres-data
-  speech-redis-data:
-    name: speech-redis-data
-  transcribe:
-    name: speech-transcribe
+    driver: bridge
