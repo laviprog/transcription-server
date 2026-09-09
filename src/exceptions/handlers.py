@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from advanced_alchemy.exceptions import NotFoundError
 from fastapi import FastAPI, HTTPException, Request
@@ -22,7 +22,7 @@ def setup_exception_handlers(app: FastAPI):
             status_code=404,
             content={
                 "detail": "Resource not found",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             },
         )
 
@@ -40,7 +40,7 @@ def setup_exception_handlers(app: FastAPI):
             headers=exc.headers or {},
             content={
                 "detail": exc.detail,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             },
         )
 
@@ -57,7 +57,7 @@ def setup_exception_handlers(app: FastAPI):
             status_code=422,
             content={
                 "detail": exc.errors(),
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             },
         )
 
@@ -74,6 +74,6 @@ def setup_exception_handlers(app: FastAPI):
             status_code=500,
             content={
                 "detail": "An unexpected error occurred",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             },
         )

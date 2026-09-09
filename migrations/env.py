@@ -1,20 +1,20 @@
 from logging.config import fileConfig
 
-from advanced_alchemy.base import UUIDAuditBase
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
+import src.database.metadata  # noqa: F401
 from src.config import settings
-from src.database.models import *  # noqa
+from src.database.base_model import BaseModel
 
 config = context.config
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-target_metadata = UUIDAuditBase.metadata
+target_metadata = BaseModel.metadata
 
-config.set_main_option("sqlalchemy.url", settings.DB_URL + "?async_fallback=True")
+config.set_main_option("sqlalchemy.url", settings.DB_URL_SYNC)
 
 
 def run_migrations_offline() -> None:

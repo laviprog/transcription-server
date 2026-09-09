@@ -1,15 +1,10 @@
 import logging
 import logging.config
-import uuid
-from typing import Any, Generic, TypeVar
+from typing import Any, ClassVar
 
 import structlog
-from structlog.typing import EventDict
 
 from src.config import settings
-
-RendererType = TypeVar("RendererType")
-
 
 Logger = structlog.stdlib.BoundLogger
 
@@ -18,19 +13,13 @@ def get_level() -> str:
     return settings.LOG_LEVEL
 
 
-def drop_color_message_key(_, __, event_dict: EventDict) -> EventDict:
-    event_dict.pop("color_message", None)
-    return event_dict
-
-
-class Logging(Generic[RendererType]):
+class Logging[RendererType]:
     timestamper = structlog.processors.TimeStamper(fmt="iso")
-    shared_processors = [
+    shared_processors: ClassVar[list[Any]] = [
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_log_level,
         structlog.stdlib.add_logger_name,
         structlog.stdlib.PositionalArgumentsFormatter(),
-        drop_color_message_key,
         timestamper,
         structlog.processors.UnicodeDecoder(),
         structlog.processors.StackInfoRenderer(),
@@ -38,9 +27,14 @@ class Logging(Generic[RendererType]):
 
     @classmethod
     def get_processors(cls) -> list[Any]:
-        cls.shared_processors.append(structlog.processors.format_exc_info)
-
-        return cls.shared_processors + [structlog.stdlib.ProcessorFormatter.wrap_for_formatter]
+        """
+        Returns the list of processors to be used by structlog.
+        """
+        return [
+            *cls.shared_processors,
+            structlog.processors.format_exc_info,
+            structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
+        ]
 
     @classmethod
     def get_renderer(cls) -> RendererType:
@@ -50,14 +44,16 @@ class Logging(Generic[RendererType]):
     def configure_stdlib(
         cls,
     ) -> None:
+        """
+        Configures the standard library logging.
+        """
         level = get_level()
-
-        cls.shared_processors.append(structlog.processors.format_exc_info)
 
         logging.config.dictConfig(
             {
                 "version": 1,
                 "disable_existing_loggers": True,
+                # define the layout of log messages
                 "formatters": {
                     "myLogger": {
                         "()": structlog.stdlib.ProcessorFormatter,
@@ -65,7 +61,10 @@ class Logging(Generic[RendererType]):
                             structlog.stdlib.ProcessorFormatter.remove_processors_meta,
                             cls.get_renderer(),
                         ],
-                        "foreign_pre_chain": cls.shared_processors,
+                        "foreign_pre_chain": [
+                            *cls.shared_processors,
+                            structlog.processors.format_exc_info,
+                        ],
                     },
                 },
                 "handlers": {
@@ -106,15 +105,38 @@ class Logging(Generic[RendererType]):
 
 
 class Production(Logging[structlog.processors.JSONRenderer]):
+    """
+    Production logging configuration using JSON renderer.
+    """
+
     @classmethod
     def get_renderer(cls) -> structlog.processors.JSONRenderer:
         return structlog.processors.JSONRenderer(ensure_ascii=False)
 
 
+class Development(Logging[structlog.dev.ConsoleRenderer]):
+    """
+    Development logging configuration using console renderer.
+    """
+
+    @classmethod
+    def get_renderer(cls) -> structlog.dev.ConsoleRenderer:
+        return structlog.dev.ConsoleRenderer()
+
+
+def get_log(name: str | None = None) -> Logger:
+    """
+    Returns a logger configured with the given name.
+    """
+    return structlog.get_logger(name)
+
+
 def configure() -> None:
-    Production.configure()
-    structlog.contextvars.bind_contextvars(service="speech-recognition-service")
-
-
-def generate_correlation_id() -> str:
-    return str(uuid.uuid4())
+    """
+    Configures logging based on the environment settings.
+    """
+    if settings.IS_DEV:
+        Development.configure()
+    else:
+        Production.configure()
+    structlog.contextvars.bind_contextvars(service="speech-api")

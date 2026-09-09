@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from advanced_alchemy.extensions.fastapi import service
 from fastapi import HTTPException, status
@@ -36,6 +36,6 @@ class ApiKeyService(service.SQLAlchemyAsyncRepositoryService[ApiKeyModel, ApiKey
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
-        api_key_model.last_used_at = datetime.now(timezone.utc)
+        api_key_model.last_used_at = datetime.now(UTC)
         api_key_model = await self.repository.update(api_key_model)
         return api_key_model

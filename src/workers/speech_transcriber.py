@@ -6,7 +6,7 @@ from whisperx.alignment import align, load_align_model
 from whisperx.asr import FasterWhisperPipeline, load_model
 from whisperx.audio import load_audio
 from whisperx.diarize import DiarizationPipeline, assign_word_speakers
-from whisperx.types import AlignedTranscriptionResult, SingleSegment, TranscriptionResult
+from whisperx.schema import AlignedTranscriptionResult, SingleSegment, TranscriptionResult
 
 from src.transcription.enums import Language, Model
 from src.utils.retry import retry
@@ -33,7 +33,7 @@ class SpeechTranscriber:
         and optional models to preload.
 
         :param device: Device to use for inference ("cpu" or "cuda").
-        :param compute_type: Compute type for inference (e.g., "float32", "int8").
+        :param compute_type: Compute type for inference (e.g., "float16", "int8").
         :param download_root: Directory for downloading and caching models.
         :param init_asr_models: Optional list of asr models to preload at startup.
         :param batch_size: Batch size for inference.
@@ -108,7 +108,7 @@ class SpeechTranscriber:
         try:
             self.__diar_cache = DiarizationPipeline(
                 model_name=model_name,
-                use_auth_token=self._hf_token,
+                token=self._hf_token,
                 device=self._device,
             )
             log.debug("Diarization pipeline loaded", model_name=model_name)
@@ -173,7 +173,7 @@ class SpeechTranscriber:
         log.debug(
             "Transcribing...",
             model=model.value,
-            language=language.value,
+            language=language.value if language else None,
             batch_size=self._batch_size,
             chuck_size=self._chunk_size,
         )

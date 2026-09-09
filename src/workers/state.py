@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import threading
+from typing import TYPE_CHECKING
 
 from src.config import settings
-from src.transcription.enums import Model
 from src.workers.speech_transcriber import SpeechTranscriber
+
+if TYPE_CHECKING:
+    from src.transcription.enums import Model
 
 _TRANSCRIBER: SpeechTranscriber | None = None
 _LOCK = threading.Lock()

@@ -1,9 +1,21 @@
+from celery.exceptions import SoftTimeLimitExceeded
+
+from src.config import settings
+
 from .app import celery_app
 from .hooks import DBReportingTask
 
 
 @celery_app.task(
-    bind=True, name="transcribe_audio", base=DBReportingTask, max_retries=3, default_retry_delay=60
+    bind=True,
+    name="transcribe_audio",
+    base=DBReportingTask,
+    autoretry_for=(Exception,),
+    dont_autoretry_for=(SoftTimeLimitExceeded, ValueError, KeyError, FileNotFoundError),
+    max_retries=settings.TASK_MAX_RETRIES,
+    retry_backoff=settings.TASK_RETRY_BACKOFF,
+    retry_backoff_max=settings.TASK_RETRY_BACKOFF_MAX,
+    retry_jitter=True,
 )
 def transcribe_audio(
     self,
@@ -15,8 +27,6 @@ def transcribe_audio(
     num_speakers: int | None,
     align_mode: bool,
 ) -> dict:
-    import os
-
     from ..transcription.enums import Language, Model
     from .state import get_transcriber
 
@@ -44,11 +54,8 @@ def transcribe_audio(
         for i, segment in enumerate(segments)
     ]
 
-    try:
-        os.remove(audio_file)
-    except FileNotFoundError:
-        pass
-
+    # The audio file is removed in DBReportingTask.after_return so that it survives
+    # retries and is cleaned up on failure too.
     return {
         "result": result,
     }

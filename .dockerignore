@@ -1,11 +1,55 @@
-.venv
-.idea
-.vs-code
-.gitignore
-.python-version
-README.md
+# Version control
 .git
-.env.example
+.gitignore
+
+# CI / project meta
+.github
+.pre-commit-config.yaml
+LICENSE
+
+# IDE / editor
+.idea
+.vscode
+
+# Docs
+docs/
+assets/
+README.md
+
+# Docker (avoid recursive context)
+/docker
 docker-compose.yml
 .dockerignore
-docker
+Dockerfile
+
+# Python bytecode & build artifacts
+__pycache__/
+*.py[cod]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Caches
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+
+# Tests
+**/tests
+
+# Coverage reports
+.coverage
+htmlcov/
+
+# Local runtime data & secrets
+data/
+models/
+.env
+.env.*
+
+# OS files
+.DS_Store

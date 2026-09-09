@@ -7,18 +7,27 @@ wheels/
 *.egg-info
 
 # Virtual environments
-.venv
+.venv/
 
 # Secrets
 .env
+.env.*
+!.env.example
 
 # IDE files
-.idea
-.vscode
+.idea/
+.vscode/
 
 # Pytest
 .coverage
+.coverage.*
+coverage.xml
 htmlcov/
+.pytest_cache/
+.ruff_cache/
+.ty_cache/
 
 .DS_Store
-models
+
+data/
+models/

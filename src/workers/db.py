@@ -1,18 +1,24 @@
 from __future__ import annotations
 
-from typing import Optional
-from uuid import UUID
+from contextlib import contextmanager
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import create_engine, select, update
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker
 
 from src.config import settings
-from src.transcription.models import TranscriptionResultModel, TranscriptionTaskModel
+from src.transcription.models import Status, TranscriptionResultModel, TranscriptionTaskModel
 from src.workers import log
 
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from datetime import datetime
+    from uuid import UUID
+
+    from sqlalchemy.orm import Session
+
 _engine = None
-_SessionLocal: Optional[sessionmaker] = None
+_SessionLocal: sessionmaker | None = None
 
 
 def init_db_sync() -> None:
@@ -29,56 +35,73 @@ def init_db_sync() -> None:
 
 
 def dispose_db_sync() -> None:
-    global _engine
+    global _engine, _SessionLocal
     if _engine is not None:
         _engine.dispose()
         _engine = None
+        _SessionLocal = None
 
 
-def update_task_sync(task_id: UUID, **values) -> None:
-    global _SessionLocal
+@contextmanager
+def _session_scope() -> Iterator[Session]:
+    """Provides a session wrapped in a single transaction."""
     if _SessionLocal is None:
         raise RuntimeError("DB not initialized: call init_db_sync() first")
 
+    session = _SessionLocal()
     try:
-        with _SessionLocal() as session:
-            stmt = (
-                update(TranscriptionTaskModel)
-                .where(TranscriptionTaskModel.id == task_id)
-                .values(**values)
-            )
-            session.execute(stmt)
-            session.commit()
-    except SQLAlchemyError as e:
-        log.error("Sync DB update failed", task_id=str(task_id), error=str(e))
-
-
-def save_transcription_result_sync(task_id: UUID, transcription_result: dict) -> None:
-    global _SessionLocal
-    if _SessionLocal is None:
-        raise RuntimeError("DB not initialized: call init_db_sync() first")
-
-    try:
-        with _SessionLocal() as session:
-            # Check if result already exists
-            stmt = select(TranscriptionResultModel).where(
-                TranscriptionResultModel.task_id == task_id
-            )
-            existing_result = session.execute(stmt).scalar_one_or_none()
-
-            if existing_result:
-                # Update existing result
-                log.debug("Updating existing transcription result", task_id=str(task_id))
-                existing_result.transcription_result = transcription_result
-                session.commit()
-            else:
-                # Create new result
-                log.debug("Creating new transcription result", task_id=str(task_id))
-                result_model = TranscriptionResultModel(
-                    task_id=task_id, transcription_result=transcription_result
-                )
-                session.add(result_model)
-                session.commit()
-    except SQLAlchemyError as e:
-        log.error("Failed to save transcription result", task_id=str(task_id), error=str(e))
+        yield session
+        session.commit()
+    except Exception:
+        session.rollback()
         raise
+    finally:
+        session.close()
+
+
+def update_task_sync(task_id: UUID, **values: Any) -> None:
+    """
+    Updates a transcription task row. Raises on failure.
+    """
+    with _session_scope() as session:
+        session.execute(
+            update(TranscriptionTaskModel)
+            .where(TranscriptionTaskModel.id == task_id)
+            .values(**values)
+        )
+
+
+def complete_task_sync(
+    task_id: UUID,
+    transcription_result: list[dict] | dict,
+    completed_at: datetime,
+    message: str,
+) -> None:
+    """
+    Stores the transcription result and marks the task COMPLETED in one transaction.
+    """
+    with _session_scope() as session:
+        existing_result = session.execute(
+            select(TranscriptionResultModel).where(TranscriptionResultModel.task_id == task_id)
+        ).scalar_one_or_none()
+
+        if existing_result:
+            log.debug("Updating existing transcription result", task_id=str(task_id))
+            existing_result.transcription_result = transcription_result
+        else:
+            log.debug("Creating new transcription result", task_id=str(task_id))
+            session.add(
+                TranscriptionResultModel(task_id=task_id, transcription_result=transcription_result)
+            )
+
+        session.flush()
+
+        session.execute(
+            update(TranscriptionTaskModel)
+            .where(TranscriptionTaskModel.id == task_id)
+            .values(
+                status=Status.COMPLETED,
+                completed_at=completed_at,
+                message=message,
+            )
+        )

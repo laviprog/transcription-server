@@ -1,13 +1,27 @@
-from enum import Enum
+from enum import StrEnum
 
 
-class BaseEnum(str, Enum):
+class BaseEnum(StrEnum):
     """Base Enum"""
 
     @classmethod
     def values(cls) -> list[str]:
-        """
-        Returns a list of all enum values.
-        :return: A list of enum values.
-        """
+        """Returns a list of all enum values."""
         return [item.value for item in cls]
+
+
+class Env(BaseEnum):
+    """Environment Enum"""
+
+    DEV = "DEV"
+    PROD = "PROD"
+
+
+class LogLevel(BaseEnum):
+    """Log Level Enum"""
+
+    DEBUG = "DEBUG"
+    INFO = "INFO"
+    WARNING = "WARNING"
+    ERROR = "ERROR"
+    CRITICAL = "CRITICAL"

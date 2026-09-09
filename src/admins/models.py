@@ -1,11 +1,10 @@
-from advanced_alchemy.base import UUIDAuditBase
 from sqlalchemy import String
 from sqlalchemy.orm import Mapped, mapped_column
 
-from src.database.soft_delete_mixin import SoftDeleteMixin
+from src.database.base_model import BaseModel
 
 
-class AdminModel(SoftDeleteMixin, UUIDAuditBase):
+class AdminModel(BaseModel):
     """Admin model."""
 
     __tablename__ = "admins"

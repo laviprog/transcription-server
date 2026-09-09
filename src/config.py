@@ -1,12 +1,15 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from src.enums import Env, LogLevel
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env")
 
-    LOG_LEVEL: str = "INFO"
+    LOG_LEVEL: LogLevel = LogLevel.INFO
+    ENV: Env = Env.PROD
 
-    ROOT_PATH: str = "/api/v1"
+    ROOT_PATH: str | None = "/api/v1"
 
     POSTGRES_HOST: str
     POSTGRES_PORT: int
@@ -20,14 +23,25 @@ class Settings(BaseSettings):
 
     TASK_TIME_LIMIT: int = 600
     TASK_RESULT_EXPIRES: int = 3600
+    TASK_MAX_RETRIES: int = 3
+    TASK_RETRY_BACKOFF: int = 60  # seconds, doubled on every retry
+    TASK_RETRY_BACKOFF_MAX: int = 600
+
+    MAX_UPLOAD_SIZE_BYTES: int = 1024 * 1024 * 1024  # 1 GB
 
     DEVICE: str = "cpu"
     COMPUTE_TYPE: str = "float16"
-    DOWNLOAD_ROOT: str = "models"
+    DOWNLOAD_ROOT: str = "/data/models"
     BATCH_SIZE: int = 8
     CHUNK_SIZE: int = 30
 
+    TMP_DIR: str = "data/tmp"
+
     HF_TOKEN: str | None = None  # Hugging Face token for diarization models
+
+    @property
+    def IS_DEV(self) -> bool:
+        return self.ENV == Env.DEV
 
     @property
     def DB_URL(self) -> str:

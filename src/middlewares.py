@@ -1,15 +1,15 @@
 import time
+import uuid
 
 import structlog
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from src import log
-from src.logging import generate_correlation_id
 
 
 class LogMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
-        correlation_id = request.headers.get("X-Request-Id") or generate_correlation_id()
+        correlation_id = request.headers.get("X-Request-Id") or str(uuid.uuid4())
         ip = request.headers.get("X-Forwarded-For", "").split(",")[0].strip() or (
             request.client.host if request.client else None
         )
@@ -27,19 +27,21 @@ class LogMiddleware(BaseHTTPMiddleware):
             response = await call_next(request)
             return response
         except Exception:
-            log.exception("Unhandled exception during request")
+            log.exception(
+                "Unhandled Exception",
+                request_method=request.method,
+                request_url=str(request.url),
+            )
             raise
         finally:
             duration_ms = round((time.perf_counter() - start) * 1000, 2)
             status = getattr(response, "status_code", None)
             log.info("Request completed", status_code=status, duration_ms=duration_ms)
 
-            try:
-                if response is not None:
-                    response.headers.setdefault("X-Request-Id", correlation_id)
-            except Exception:
-                pass
+            if response is not None:
+                response.headers.setdefault("X-Request-Id", correlation_id)
 
+            # unbind context variables
             structlog.contextvars.unbind_contextvars(
                 "correlation_id", "method", "path", "ip_address"
             )

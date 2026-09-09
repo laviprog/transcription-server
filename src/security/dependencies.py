@@ -1,4 +1,4 @@
-from typing import Annotated, TypeAlias
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import Depends, Header, HTTPException, status
@@ -22,4 +22,4 @@ async def verify_api_key(
     return api_key.id
 
 
-ApiKeyIdDep: TypeAlias = Annotated[UUID, Depends(verify_api_key)]
+type ApiKeyIdDep = Annotated[UUID, Depends(verify_api_key)]

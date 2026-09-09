@@ -1,9 +1,6 @@
-import src.database.models  # noqa
-import src.workers.signals  # noqa
-import src.workers.db  # noqa
-
 from celery import Celery
 
+import src.workers.db  # noqa
 from src.config import settings
 
 celery_app = Celery(
@@ -26,7 +23,13 @@ celery_app.conf.update(
     task_acks_late=True,
     task_reject_on_worker_lost=True,
     worker_prefetch_multiplier=1,
-    broker_transport_options={"visibility_timeout": settings.TASK_TIME_LIMIT + 600},
+    broker_connection_retry_on_startup=True,
+    broker_transport_options={
+        "visibility_timeout": settings.TASK_TIME_LIMIT + 600,
+        "socket_timeout": 5.0,
+        "socket_connect_timeout": 5.0,
+        "retry_on_timeout": True,
+    },
 )
 
 celery_app.autodiscover_tasks(["src.workers"])

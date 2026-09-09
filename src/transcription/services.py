@@ -1,11 +1,19 @@
+import asyncio
 from contextlib import suppress
+from datetime import UTC, datetime
 from uuid import UUID
 
 from advanced_alchemy.extensions.fastapi import service
 from fastapi import HTTPException, UploadFile, status
 
 from .. import log
-from ..utils.files import save_upload_to_temp
+from ..utils.files import (
+    EmptyFileError,
+    FileTooLargeError,
+    UnsupportedFileTypeError,
+    save_upload_to_temp,
+)
+from ..utils.fs import remove_file_async
 from ..utils.media import get_duration_seconds, get_filesize_bytes
 from ..workers.app import celery_app
 from .enums import Language, Model
@@ -38,14 +46,23 @@ class TranscriptionTaskService(
     ) -> TranscriptionTask:
         try:
             audio_path = await save_upload_to_temp(file)
-        except ValueError as e:
-            with suppress(Exception):
-                await file.close()
+        except FileTooLargeError as e:
+            raise HTTPException(
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                detail=str(e),
+            ) from e
+        except (UnsupportedFileTypeError, EmptyFileError) as e:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid audio file",
+                detail=str(e),
             ) from e
-        else:
+        except Exception as e:
+            log.error("Failed to store uploaded file", error=str(e))
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to store uploaded file",
+            ) from e
+        finally:
             with suppress(Exception):
                 await file.close()
         try:
@@ -72,20 +89,57 @@ class TranscriptionTaskService(
             file_size_bytes=file_size_bytes,
         )
 
-        transcription_task_model = await self.create(transcription_task_model)
+        try:
+            transcription_task_model = await self.create(transcription_task_model)
+        except Exception as e:
+            log.error("Failed to create transcription task row", error=str(e))
+            await remove_file_async(audio_path)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create transcription task",
+            ) from e
 
-        celery_app.send_task(
-            "transcribe_audio",
-            task_id=str(transcription_task_model.id),
-            kwargs={
-                "audio_file": audio_path,
-                "model": model.value,
-                "language": language.value if language else None,
-                "recognition_mode": recognition_mode,
-                "num_speakers": num_speakers,
-                "align_mode": align_mode,
-            },
-        )
+        try:
+            # send_task is a blocking broker call; keep it off the event loop and
+            # bound its retries so a dead broker fails fast instead of hanging.
+            await asyncio.to_thread(
+                celery_app.send_task,
+                "transcribe_audio",
+                task_id=str(transcription_task_model.id),
+                kwargs={
+                    "audio_file": audio_path,
+                    "model": model.value,
+                    "language": language.value if language else None,
+                    "recognition_mode": recognition_mode,
+                    "num_speakers": num_speakers,
+                    "align_mode": align_mode,
+                },
+                retry=True,
+                retry_policy={
+                    "max_retries": 3,
+                    "interval_start": 0,
+                    "interval_step": 0.2,
+                    "interval_max": 1,
+                },
+            )
+        except Exception as e:
+            # The row is already committed: without this it would sit in PENDING
+            # forever with nobody to pick it up.
+            log.error(
+                "Failed to enqueue transcription task",
+                task_id=str(transcription_task_model.id),
+                error=str(e),
+            )
+            await remove_file_async(audio_path)
+            with suppress(Exception):
+                transcription_task_model.status = Status.FAILED
+                transcription_task_model.message = "Failed to enqueue transcription task"
+                transcription_task_model.completed_at = datetime.now(UTC)
+                await self.update(transcription_task_model)
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Transcription service is temporarily unavailable, please retry later",
+            ) from e
 
         return TranscriptionTask(
             task_id=transcription_task_model.id,

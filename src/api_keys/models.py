@@ -4,18 +4,17 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from advanced_alchemy.base import UUIDAuditBase
 from sqlalchemy import ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.database.soft_delete_mixin import SoftDeleteMixin
+from src.database.base_model import BaseModel
 
 if TYPE_CHECKING:
     from src.transcription.models import TranscriptionTaskModel
     from src.users.models import UserModel
 
 
-class ApiKeyModel(SoftDeleteMixin, UUIDAuditBase):
+class ApiKeyModel(BaseModel):
     """API Keys model."""
 
     __tablename__ = "api_keys"

@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from pydantic import BaseModel, Field
 
@@ -12,4 +12,4 @@ class BaseSchema(BaseModel):
 
 class HealthCheck(BaseModel):
     status: str = "ok"
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))

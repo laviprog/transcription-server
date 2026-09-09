@@ -4,14 +4,13 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from advanced_alchemy.base import UUIDAuditBase
 from advanced_alchemy.types import DateTimeUTC
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import ForeignKey
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.database.soft_delete_mixin import SoftDeleteMixin
+from src.database.base_model import BaseModel
 from src.enums import BaseEnum
 from src.transcription.enums import Language, Model
 
@@ -27,7 +26,7 @@ class Status(BaseEnum):
     CANCELED = "CANCELED"
 
 
-class TranscriptionTaskModel(SoftDeleteMixin, UUIDAuditBase):
+class TranscriptionTaskModel(BaseModel):
     """Transcription Task model."""
 
     __tablename__ = "transcription_tasks"
@@ -59,7 +58,7 @@ class TranscriptionTaskModel(SoftDeleteMixin, UUIDAuditBase):
     )
 
 
-class TranscriptionResultModel(UUIDAuditBase):
+class TranscriptionResultModel(BaseModel):
     """Transcription Result model - stores the heavy JSONB data separately."""
 
     __tablename__ = "transcription_results"

@@ -36,11 +36,11 @@ services:
   migrate:
     build:
       context: .
-      dockerfile: docker/Dockerfile.api
+      dockerfile: docker/Dockerfile
     image: speech-app:latest
     env_file:
       - .env
-    command: [ "uv", "run", "alembic", "upgrade", "head" ]
+    command: [ "alembic", "upgrade", "head" ]
     networks:
       - speech-network
     depends_on:
@@ -51,47 +51,39 @@ services:
   app:
     build:
       context: .
-      dockerfile: docker/Dockerfile.api
+      dockerfile: docker/Dockerfile
     image: speech-app:latest
     env_file:
       - .env
     ports:
       - "127.0.0.1:8080:8080"
     volumes:
-      - ./data/transcribe:/srv/transcribe
+      - ./data:/data:Z
     networks:
       - speech-network
-    environment:
-      - TRANSCRIBE_TMP_DIR=/srv/transcribe
     depends_on:
       migrate:
         condition: service_completed_successfully
       redis:
-        condition: service_started
+        condition: service_healthy
     restart: unless-stopped
 
   worker:
     build:
       context: .
-      # dockerfile: docker/Dockerfile.worker.cuda
-      dockerfile: docker/Dockerfile.worker
+      dockerfile: docker/worker/Dockerfile
     image: speech-worker:latest
     env_file:
       - .env
     volumes:
-      - ./data/transcribe:/srv/transcribe
+      - ./data:/data:Z
     networks:
       - speech-network
-    environment:
-      - TRANSCRIBE_TMP_DIR=/srv/transcribe
-    #  - NVIDIA_VISIBLE_DEVICES=0
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-      app:
-        condition: service_started
       migrate:
         condition: service_completed_successfully
     restart: unless-stopped
