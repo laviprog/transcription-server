@@ -1,6 +1,8 @@
+from typing import Any
+
 from src.exceptions.schemas import ErrorResponse
 
-error_responses = {
+error_responses: dict[int | str, dict[str, Any]] = {
     400: {"model": ErrorResponse, "description": "Bad request"},
     401: {"model": ErrorResponse, "description": "Unauthorized"},
     403: {"model": ErrorResponse, "description": "Forbidden"},

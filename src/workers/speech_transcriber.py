@@ -1,7 +1,7 @@
 import gc
+from typing import TYPE_CHECKING, NotRequired, cast
 
 import torch
-from numpy import ndarray
 from whisperx.alignment import align, load_align_model
 from whisperx.asr import FasterWhisperPipeline, load_model
 from whisperx.audio import load_audio
@@ -11,6 +11,19 @@ from whisperx.schema import AlignedTranscriptionResult, SingleSegment, Transcrip
 from src.transcription.enums import Language, Model
 from src.utils.retry import retry
 from src.workers import log
+
+if TYPE_CHECKING:
+    from numpy import ndarray
+    from pandas import DataFrame
+
+
+class Segment(SingleSegment):
+    """
+    A transcription segment as it leaves the pipeline: whisperx adds the ``speaker``
+    key during diarization, so it is absent unless recognition mode was requested.
+    """
+
+    speaker: NotRequired[str]
 
 
 class SpeechTranscriber:
@@ -98,7 +111,9 @@ class SpeechTranscriber:
             log.error("Failed to load align model", lang_code=lang_code, error=str(e))
             raise e
 
-    def _load_diar(self, model_name: str = "pyannote/speaker-diarization-3.1") -> None:
+    def _load_diar(
+        self, model_name: str = "pyannote/speaker-diarization-3.1"
+    ) -> DiarizationPipeline:
         """
         Loads a diarization model and stores it in the cache.
         """
@@ -115,6 +130,8 @@ class SpeechTranscriber:
         except Exception as e:
             log.error("Failed to load diarization pipeline", model_name=model_name, error=str(e))
             raise e
+
+        return self.__diar_cache
 
     def _get_asr(self, model: Model) -> FasterWhisperPipeline:
         """
@@ -140,11 +157,11 @@ class SpeechTranscriber:
         Retrieves the diarization model from cache or loads it if not present.
         """
         if self.__diar_cache is None:
-            self._load_diar(model_name)
+            return self._load_diar(model_name)
         return self.__diar_cache
 
     @staticmethod
-    def _load_audio(audio_file: str) -> ndarray:
+    def _load_audio(audio_file: str) -> "ndarray":
         """
         Loads audio file into a numpy array.
         """
@@ -160,7 +177,7 @@ class SpeechTranscriber:
     @retry()
     def _transcribe(
         self,
-        audio: ndarray,
+        audio: "ndarray",
         audio_file: str,
         model: Model,
         language: Language | None,
@@ -197,7 +214,7 @@ class SpeechTranscriber:
 
     @retry()
     def _align(
-        self, segments: list[SingleSegment], audio: ndarray, language: str
+        self, segments: list[SingleSegment], audio: "ndarray", language: str
     ) -> AlignedTranscriptionResult | None:
         """
         Aligns the transcription segments with the audio using the alignment model.
@@ -221,10 +238,12 @@ class SpeechTranscriber:
 
     @retry()
     def _diarize(
-        self, transcription_result: TranscriptionResult, audio: ndarray, num_speakers: int
+        self, transcription_result: TranscriptionResult, audio: "ndarray", num_speakers: int | None
     ) -> TranscriptionResult:
         """
         Performs speaker diarization and assigns speakers to transcription segments.
+
+        A ``num_speakers`` of None lets the pipeline infer the speaker count itself.
         """
         diarization_model = self._get_diar()
         log.debug(
@@ -232,8 +251,17 @@ class SpeechTranscriber:
             num_speakers=num_speakers,
         )
         try:
-            diar_segments = diarization_model(audio, num_speakers=num_speakers)
-            result = assign_word_speakers(diar_segments, transcription_result)
+            diar_output = diarization_model(audio, num_speakers=num_speakers)
+            # Without return_embeddings the pipeline yields the dataframe alone, but its
+            # signature covers both shapes.
+            diar_segments: DataFrame = (
+                diar_output[0] if isinstance(diar_output, tuple) else diar_output
+            )
+            # The speakers are assigned in place, so the result keeps the shape it was given.
+            result = cast(
+                "TranscriptionResult",
+                assign_word_speakers(diar_segments, transcription_result),
+            )
             self._clean_cuda()
             return result
         except RuntimeError as e:
@@ -252,7 +280,7 @@ class SpeechTranscriber:
         recognition_mode: bool,
         num_speakers: int | None,
         align_mode: bool,
-    ) -> list[SingleSegment]:
+    ) -> list[Segment]:
         """
         Transcribes the given audio file, optionally performing speaker diarization.
         """
@@ -281,7 +309,7 @@ class SpeechTranscriber:
         if recognition_mode:
             transcription_result = self._diarize(transcription_result, audio, num_speakers)
 
-        return transcription_result["segments"]
+        return cast("list[Segment]", transcription_result["segments"])
 
     def _clean_cuda(self) -> None:
         """

@@ -1,5 +1,5 @@
 [project]
-name = "Transcription Server"
+name = "transcription-server"
 version = "1.0.0"
 description = "Transcription Server is a fast and fault-tolerant service for working with STT"
 readme = "README.md"
@@ -30,7 +30,9 @@ worker = [
 
 [dependency-groups]
 dev = [
-    "ruff>=0.16.6"
+    "pre-commit>=4.6.2",
+    "ruff>=0.16.6",
+    "ty>=0.0.80",
 ]
 
 [tool.ruff]
@@ -51,3 +53,12 @@ fixable = ["ALL"]
 quote-style = "double"
 indent-style = "space"
 line-ending = "auto"
+
+[tool.ty.environment]
+python-version = "3.12"
+
+[tool.ty.src]
+include = ["src", "tests"]
+
+[tool.ty.terminal]
+error-on-warning = true

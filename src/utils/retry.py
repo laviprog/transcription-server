@@ -1,10 +1,14 @@
 import functools
 import time
 from collections.abc import Callable
+from typing import ParamSpec, TypeVar
 
 import structlog
 
 log = structlog.get_logger()
+
+P = ParamSpec("P")
+R = TypeVar("R")
 
 
 def retry(
@@ -12,16 +16,19 @@ def retry(
     delay: float = 1.0,
     backoff: float = 2.0,
     exceptions: tuple[type[BaseException], ...] = (Exception,),
-) -> Callable:
+) -> Callable[[Callable[P, R]], Callable[P, R]]:
     """
     Retries the wrapped callable on failure with exponential backoff.
     """
     if attempts < 1:
         raise ValueError("attempts must be >= 1")
 
-    def decorator_retry(func):
+    def decorator_retry(func: Callable[P, R]) -> Callable[P, R]:
+        # Not every callable is a function, so fall back to repr for the log field.
+        func_name = getattr(func, "__qualname__", repr(func))
+
         @functools.wraps(func)
-        def wrapper_retry(*args, **kwargs):
+        def wrapper_retry(*args: P.args, **kwargs: P.kwargs) -> R:
             current_delay = delay
             for attempt in range(1, attempts + 1):
                 try:
@@ -30,7 +37,7 @@ def retry(
                     if attempt == attempts:
                         log.error(
                             "Attempt failed, giving up",
-                            func=func.__qualname__,
+                            func=func_name,
                             attempt=attempt,
                             attempts=attempts,
                             error=str(e),
@@ -38,7 +45,7 @@ def retry(
                         raise
                     log.warning(
                         "Attempt failed, retrying",
-                        func=func.__qualname__,
+                        func=func_name,
                         attempt=attempt,
                         attempts=attempts,
                         delay=current_delay,

@@ -73,7 +73,7 @@ def update_task_sync(task_id: UUID, **values: Any) -> None:
 
 def complete_task_sync(
     task_id: UUID,
-    transcription_result: list[dict] | dict,
+    transcription_result: list[dict[str, Any]],
     completed_at: datetime,
     message: str,
 ) -> None:
