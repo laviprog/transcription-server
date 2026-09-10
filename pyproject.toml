@@ -1,7 +1,7 @@
 [project]
-name = "speech-api"
+name = "Transcription Server"
 version = "1.0.0"
-description = "Speech API is a fast and fault-tolerant service for working with STT"
+description = "Transcription Server is a fast and fault-tolerant service for working with STT"
 readme = "README.md"
 requires-python = ">=3.12,<3.14"
 dependencies = [
