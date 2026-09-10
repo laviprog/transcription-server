@@ -1,9 +1,25 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from celery.exceptions import SoftTimeLimitExceeded
 
 from src.config import settings
 
 from .app import celery_app
 from .hooks import DBReportingTask
+
+if TYPE_CHECKING:
+    from .speech_transcriber import Segment
+
+
+def _speaker_number(segment: Segment) -> int | None:
+    """
+    Turns a whisperx speaker label ("SPEAKER_00") into a 1-based speaker number.
+    The key is absent when the segment was not diarized.
+    """
+    speaker = segment.get("speaker")
+    return int(speaker.split("_")[-1]) + 1 if speaker else None
 
 
 @celery_app.task(
@@ -45,9 +61,7 @@ def transcribe_audio(
         {
             "number": i + 1,
             "content": segment["text"].strip(),
-            "speaker": int(segment["speaker"].split("_")[-1]) + 1
-            if segment.get("speaker", None)
-            else None,
+            "speaker": _speaker_number(segment),
             "start": segment["start"],
             "end": segment["end"],
         }

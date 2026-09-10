@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from advanced_alchemy.types import DateTimeUTC
@@ -67,6 +67,6 @@ class TranscriptionResultModel(BaseModel):
         ForeignKey("transcription_tasks.id", ondelete="CASCADE"), unique=True, nullable=False
     )
 
-    transcription_result: Mapped[dict] = mapped_column(JSONB(), nullable=False)
+    transcription_result: Mapped[list[dict[str, Any]]] = mapped_column(JSONB(), nullable=False)
 
     task: Mapped[TranscriptionTaskModel] = relationship(back_populates="result")

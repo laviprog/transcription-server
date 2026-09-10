@@ -16,7 +16,9 @@ def wav_duration_seconds(path: str) -> float:
 def mp3_duration_seconds(path: str) -> float | None:
     from mutagen.mp3 import MP3
 
-    return float(MP3(path).info.length)
+    # A missing or corrupt file raises MutagenError, which the caller already handles.
+    info = MP3(path).info
+    return float(info.length) if info is not None else None
 
 
 def get_duration_seconds(path: str) -> float | None:

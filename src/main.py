@@ -3,6 +3,7 @@ from scalar_fastapi import Theme, add_scalar_reference
 from starlette.middleware.cors import CORSMiddleware
 
 from src.middlewares import LogMiddleware
+
 from .config import settings
 from .exceptions.handlers import setup_exception_handlers
 from .exceptions.responses import error_responses
