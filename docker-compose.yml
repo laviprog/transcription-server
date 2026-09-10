@@ -8,7 +8,7 @@ services:
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
-      - ./data/postgres:/var/lib/postgresql/data
+      - ./data/postgres:/var/lib/postgresql/data:Z
     networks:
       - speech-network
     healthcheck:
@@ -23,7 +23,7 @@ services:
     ports:
       - "127.0.0.1:6379:6379"
     volumes:
-      - ./data/redis:/data
+      - ./data/redis:/data:Z
     networks:
       - speech-network
     healthcheck:
@@ -61,6 +61,12 @@ services:
       - ./data:/data:Z
     networks:
       - speech-network
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -fsS http://localhost:8080/healthcheck || exit 1" ]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
     depends_on:
       migrate:
         condition: service_completed_successfully
