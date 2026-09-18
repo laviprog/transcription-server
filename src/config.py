@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     LOG_LEVEL: LogLevel = LogLevel.INFO
     ENV: Env = Env.PROD
 
-    ROOT_PATH: str | None = "/api/v1"
+    ROOT_PATH: str | None = None
 
     POSTGRES_HOST: str
     POSTGRES_PORT: int
@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     REDIS_PORT: int
     REDIS_DB: int = 0
 
-    TASK_TIME_LIMIT: int = 600
+    TASK_TIME_LIMIT: int = 300
     TASK_RESULT_EXPIRES: int = 3600
     TASK_MAX_RETRIES: int = 3
     TASK_RETRY_BACKOFF: int = 60  # seconds, doubled on every retry
@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     BATCH_SIZE: int = 8
     CHUNK_SIZE: int = 30
 
-    TMP_DIR: str = "data/tmp"
+    TMP_DIR: str = "/data/tmp"
 
     HF_TOKEN: str | None = None  # Hugging Face token for diarization models
 

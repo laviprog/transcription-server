@@ -2,6 +2,7 @@ from celery import Celery
 
 import src.workers.db  # noqa
 from src.config import settings
+from src.workers import signals  # noqa: F401
 
 celery_app = Celery(
     "transcription_tasks",
