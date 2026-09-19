@@ -1,3 +1,40 @@
+x-app: &app
+  build:
+    context: .
+    dockerfile: docker/Dockerfile
+  image: transcription-server:latest
+  environment:
+    ENV: ${ENV:-PROD}
+    LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    ROOT_PATH: ${ROOT_PATH:-}
+    POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
+    POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+    POSTGRES_DB: ${POSTGRES_DB:-transcription_server_db}
+    POSTGRES_USER: ${POSTGRES_USER:-user}
+    POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+    REDIS_HOST: ${REDIS_HOST:-redis}
+    REDIS_PORT: ${REDIS_PORT:-6379}
+    REDIS_DB: ${REDIS_DB:-0}
+    # Device for model inference, can be cpu or cuda
+    DEVICE: ${DEVICE:-cpu}
+    # Precision for model inference, can be float16, float32, int8 or
+    # int8_float16 (it's hybrid precision, where the model weights are int8 and the activations are float16)
+    COMPUTE_TYPE: ${COMPUTE_TYPE:-float16}
+    # Count of chunks to process in parallel for audio processing
+    # Increase this value to improve throughput, but it will also increase memory usage
+    BATCH_SIZE: ${BATCH_SIZE:-8}
+    # Size of each chunk in seconds for audio processing (maximum val is 30)
+    CHUNK_SIZE: ${CHUNK_SIZE:-30}
+    MAX_UPLOAD_SIZE_BYTES: ${MAX_UPLOAD_SIZE_BYTES:-1073741824}
+    TASK_TIME_LIMIT: ${TASK_TIME_LIMIT:-300}
+    TASK_RESULT_EXPIRES: ${TASK_RESULT_EXPIRES:-3600}
+    TASK_MAX_RETRIES: ${TASK_MAX_RETRIES:-3}
+    TASK_RETRY_BACKOFF: ${TASK_RETRY_BACKOFF:-60}
+    TASK_RETRY_BACKOFF_MAX: ${TASK_RETRY_BACKOFF_MAX:-600}
+    HF_TOKEN: ${HF_TOKEN:-}
+  networks:
+    - transcription-server-network
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -10,7 +47,7 @@ services:
     volumes:
       - ./data/postgres:/var/lib/postgresql/data:Z
     networks:
-      - speech-network
+      - transcription-server-network
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
       interval: 5s
@@ -25,7 +62,7 @@ services:
     volumes:
       - ./data/redis:/data:Z
     networks:
-      - speech-network
+      - transcription-server-network
     healthcheck:
       test: [ "CMD-SHELL", "redis-cli ping || exit 1" ]
       interval: 5s
@@ -34,33 +71,19 @@ services:
     restart: unless-stopped
 
   migrate:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile
-    image: speech-app:latest
-    env_file:
-      - .env
+    <<: *app
     command: [ "alembic", "upgrade", "head" ]
-    networks:
-      - speech-network
     depends_on:
       postgres:
         condition: service_healthy
     restart: no
 
   app:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile
-    image: speech-app:latest
-    env_file:
-      - .env
+    <<: *app
     ports:
       - "127.0.0.1:8080:8080"
     volumes:
       - ./data:/data:Z
-    networks:
-      - speech-network
     healthcheck:
       test: [ "CMD-SHELL", "curl -fsS http://localhost:8080/healthcheck || exit 1" ]
       interval: 60s
@@ -75,16 +98,13 @@ services:
     restart: unless-stopped
 
   worker:
+    <<: *app
     build:
       context: .
       dockerfile: docker/worker/Dockerfile
-    image: speech-worker:latest
-    env_file:
-      - .env
+    image: transcription-server-worker:latest
     volumes:
       - ./data:/data:Z
-    networks:
-      - speech-network
     depends_on:
       postgres:
         condition: service_healthy
@@ -102,6 +122,6 @@ services:
     #           device_ids: ["0"]
 
 networks:
-  speech-network:
-    name: speech-network
+  transcription-server-network:
+    name: transcription-server-network
     driver: bridge

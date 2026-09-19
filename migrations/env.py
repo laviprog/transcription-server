@@ -3,9 +3,9 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
-import src.database.metadata  # noqa: F401
-from src.config import settings
-from src.database.base_model import BaseModel
+import transcription_server.domain.metadata  # noqa: F401
+from transcription_server.core.config import settings
+from transcription_server.core.database.base_model import BaseModel
 
 config = context.config
 

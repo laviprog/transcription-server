@@ -16,13 +16,16 @@ RUN apt-get update \
 
 RUN groupadd --system app && useradd --system --gid app --home-dir /app app
 
-COPY pyproject.toml uv.lock ./
+COPY pyproject.toml uv.lock README.md ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --extra api --no-install-project
 
 COPY alembic.ini ./
 COPY migrations ./migrations
 COPY src ./src
+
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev --extra api
 
 RUN mkdir -p ${TMP_DIR} && chown -R app:app /app ${TMP_DIR}
 USER app

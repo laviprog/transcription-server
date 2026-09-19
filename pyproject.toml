@@ -35,6 +35,10 @@ dev = [
     "ty>=0.0.80",
 ]
 
+[build-system]
+requires = ["uv_build>=0.12,<0.13"]
+build-backend = "uv_build"
+
 [tool.ruff]
 line-length = 100
 target-version = "py312"
@@ -46,8 +50,8 @@ select = ["E", "F", "I", "UP", "B", "ASYNC", "SIM", "TCH", "RUF"]
 fixable = ["ALL"]
 
 [tool.ruff.lint.per-file-ignores]
-"src/**/models.py" = ["TC001", "TC002", "TC003"]
-"src/database/mixins/*.py" = ["TC001", "TC002", "TC003"]
+"src/transcription_server/domain/**/models.py" = ["TC001", "TC002", "TC003"]
+"src/transcription_server/core/database/mixins/*.py" = ["TC001", "TC002", "TC003"]
 
 [tool.ruff.format]
 quote-style = "double"
