@@ -26,6 +26,12 @@ x-app: &app
     # Size of each chunk in seconds for audio processing (maximum val is 30)
     CHUNK_SIZE: ${CHUNK_SIZE:-30}
     MAX_UPLOAD_SIZE_BYTES: ${MAX_UPLOAD_SIZE_BYTES:-1073741824}
+    TASK_TIME_LIMIT: ${TASK_TIME_LIMIT:-300}
+    TASK_RESULT_EXPIRES: ${TASK_RESULT_EXPIRES:-3600}
+    TASK_MAX_RETRIES: ${TASK_MAX_RETRIES:-3}
+    TASK_RETRY_BACKOFF: ${TASK_RETRY_BACKOFF:-60}
+    TASK_RETRY_BACKOFF_MAX: ${TASK_RETRY_BACKOFF_MAX:-600}
+    HF_TOKEN: ${HF_TOKEN:-}
   networks:
     - transcription-server-network
 
@@ -93,6 +99,10 @@ services:
 
   worker:
     <<: *app
+    build:
+      context: .
+      dockerfile: docker/worker/Dockerfile
+    image: transcription-server-worker:latest
     volumes:
       - ./data:/data:Z
     depends_on:
