@@ -14,7 +14,6 @@ LICENSE
 # Docs
 docs/
 assets/
-README.md
 
 # Docker (avoid recursive context)
 /docker

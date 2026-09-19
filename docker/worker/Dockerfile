@@ -21,11 +21,14 @@ RUN apt-get update \
 
 RUN groupadd --system app && useradd --system --gid app --home-dir /app app
 
-COPY pyproject.toml uv.lock ./
+COPY pyproject.toml uv.lock README.md ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --extra worker --no-install-project
 
 COPY src ./src
+
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev --extra worker
 
 RUN mkdir -p ${DOWNLOAD_ROOT} ${TMP_DIR} && chown -R app:app /app ${DOWNLOAD_ROOT} ${TMP_DIR}
 USER app
@@ -34,4 +37,4 @@ HEALTHCHECK --interval=30s --timeout=20s --start-period=600s --retries=3 \
     CMD celery -A src.workers.app:celery_app inspect ping --timeout=15 -d "celery@$(hostname)" || exit 1
 
 CMD ["celery", "-A", "src.workers.app:celery_app", "worker", \
-     "--loglevel=INFO", "--concurrency=1", "--without-gossip", "--without-mingle"]
+     "--concurrency=1", "--without-gossip", "--without-mingle"]
