@@ -18,6 +18,6 @@ async def healthcheck() -> HealthCheck:
     return HealthCheck()
 
 
-def routes_register(app: FastAPI) -> None:
+def register_router(app: FastAPI) -> None:
     app.include_router(router=router)
     app.include_router(router=transcriptions_router)
