@@ -12,7 +12,7 @@ from transcription_server.core.log_config import configure as configure_logging
 configure_logging("api")
 
 app = FastAPI(
-    title="Speech Recognition API",
+    title="Transcription Server API",
     version="0.0.1",
     root_path=settings.ROOT_PATH or "",
     responses=error_responses,
