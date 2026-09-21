@@ -20,7 +20,7 @@ celery_app.conf.update(
     task_send_sent_event=True,
     result_expires=settings.TASK_RESULT_EXPIRES,
     task_time_limit=settings.TASK_TIME_LIMIT,
-    task_soft_time_limit=settings.TASK_TIME_LIMIT - 60,
+    task_soft_time_limit=max(60, settings.TASK_TIME_LIMIT - 60),
     task_acks_late=True,
     task_reject_on_worker_lost=True,
     worker_prefetch_multiplier=1,
