@@ -24,10 +24,7 @@ from transcription_server.core.utils import (
 )
 from transcription_server.domain.transcription.enums import Language, Model
 from transcription_server.domain.transcription.models import Status, TranscriptionTaskModel
-from transcription_server.domain.transcription.repositories import (
-    TranscriptionResultRepository,
-    TranscriptionTaskRepository,
-)
+from transcription_server.domain.transcription.repositories import TranscriptionTaskRepository
 from transcription_server.worker.app import celery_app
 
 log = structlog.get_logger(__name__)
@@ -43,7 +40,6 @@ class TranscriptionTaskService(
     def __init__(self, session, **kwargs):
         kwargs.setdefault("auto_commit", True)
         super().__init__(session=session, **kwargs)
-        self.result_repository = TranscriptionResultRepository(session=session)
 
     async def create_transcription_task(
         self,

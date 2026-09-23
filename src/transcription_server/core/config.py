@@ -39,17 +39,30 @@ class Settings(BaseSettings):
 
     HF_TOKEN: str | None = None  # Hugging Face token for diarization models
 
+    CORS_ORIGINS: str = ""
+
     @property
     def IS_DEV(self) -> bool:
         return self.ENV == Env.DEV
 
     @property
-    def DB_URL(self) -> str:
-        return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+    def CORS_ORIGINS_LIST(self) -> list[str]:
+        return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
+
+    @property
+    def _DB_URL_BASE(self) -> str:
+        return (
+            f"{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:"
+            f"{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+        )
+
+    @property
+    def DB_URL_ASYNC(self) -> str:
+        return f"postgresql+asyncpg://{self._DB_URL_BASE}"
 
     @property
     def DB_URL_SYNC(self) -> str:
-        return f"postgresql+psycopg2://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+        return f"postgresql+psycopg2://{self._DB_URL_BASE}"
 
     @property
     def REDIS_URL(self) -> str:

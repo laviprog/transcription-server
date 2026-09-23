@@ -32,6 +32,8 @@ x-app: &app
     TASK_RETRY_BACKOFF: ${TASK_RETRY_BACKOFF:-60}
     TASK_RETRY_BACKOFF_MAX: ${TASK_RETRY_BACKOFF_MAX:-600}
     HF_TOKEN: ${HF_TOKEN:-}
+    # A comma-separated list of origins that are allowed to access the API. If not set, CORS will be disabled.
+    CORS_ORIGINS: ${CORS_ORIGINS:-}
   networks:
     - transcription-server-network
 
