@@ -7,6 +7,6 @@ from transcription_server.core.config import settings
 
 session_config = AsyncSessionConfig(expire_on_commit=False)
 sqlalchemy_config = SQLAlchemyAsyncConfig(
-    connection_string=settings.DB_URL,
+    connection_string=settings.DB_URL_ASYNC,
     session_config=session_config,
 )

@@ -2,7 +2,9 @@ import time
 import uuid
 
 import structlog
-from starlette.middleware.cors import CORSMiddleware
+from fastapi.middleware.cors import CORSMiddleware
+
+from transcription_server.core.config import settings
 
 log = structlog.get_logger(__name__)
 
@@ -49,8 +51,8 @@ def register_middlewares(app):
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=settings.CORS_ORIGINS_LIST,
         allow_credentials=True,
-        allow_methods=["*"],
+        allow_methods=["GET", "POST", "PUT", "DELETE"],
         allow_headers=["*"],
     )
