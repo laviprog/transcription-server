@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     DOWNLOAD_ROOT: str = "/data/models"
     BATCH_SIZE: int = 8
     CHUNK_SIZE: int = 30
+    MAX_ALIGN_MODELS: int = 2
 
     TMP_DIR: str = "/data/tmp"
 

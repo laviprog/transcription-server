@@ -1,9 +1,15 @@
 import gc
+from collections import OrderedDict
 from typing import TYPE_CHECKING, NotRequired, cast
 
 import structlog
 import torch
-from whisperx.alignment import align, load_align_model
+from whisperx.alignment import (
+    DEFAULT_ALIGN_MODELS_HF,
+    DEFAULT_ALIGN_MODELS_TORCH,
+    align,
+    load_align_model,
+)
 from whisperx.asr import FasterWhisperPipeline, load_model
 from whisperx.audio import load_audio
 from whisperx.diarize import DiarizationPipeline, assign_word_speakers
@@ -13,6 +19,9 @@ from transcription_server.core.utils import retry
 from transcription_server.domain.transcription.enums import Language, Model
 
 log = structlog.get_logger(__name__)
+
+# Align models loaded at startup; the rest are loaded lazily on first use.
+_PRELOAD_ALIGN_LANGUAGES = (Language.RU, Language.EN)
 
 if TYPE_CHECKING:
     from numpy import ndarray
@@ -40,6 +49,7 @@ class SpeechTranscriber:
         download_root: str,
         batch_size: int,
         chunk_size: int,
+        max_align_models: int = 2,
         init_asr_models: list[Model] | None = None,
         hf_token: str | None = None,
     ):
@@ -53,10 +63,12 @@ class SpeechTranscriber:
         :param init_asr_models: Optional list of asr models to preload at startup.
         :param batch_size: Batch size for inference.
         :param chunk_size: Chunk size (in seconds) for audio splitting.
+        :param max_align_models: Max alignment models kept in memory at once; the least
+            recently used one is evicted to make room for a new one.
         :param hf_token: Optional Hugging Face token for private diarization model access.
         """
         self.__asr_cache: dict[str, FasterWhisperPipeline] = {}
-        self.__align_cache: dict[str, tuple] = {}
+        self.__align_cache: OrderedDict[str, tuple] = OrderedDict()
         self.__diar_cache: DiarizationPipeline | None = None
 
         self._device = device
@@ -64,16 +76,18 @@ class SpeechTranscriber:
         self._download_root = download_root
         self._batch_size = batch_size
         self._chunk_size = chunk_size
+        self._max_align_models = max_align_models
         self._hf_token = hf_token
 
         self._load_models(init_asr_models)
 
     def _load_models(self, asr_models: list[Model] | None) -> None:
         """
-        Preloads specified ASR models into cache.
+        Preloads the default align models and the specified ASR models into cache.
         """
-        for lang in Language.values():
-            self._load_align(lang_code=lang)
+        # Loading more than the cache holds would only evict the ones loaded first.
+        for lang in _PRELOAD_ALIGN_LANGUAGES[-self._max_align_models :]:
+            self._load_align(lang_code=lang.value)
         self._load_diar()
         for model in asr_models or [Model.TURBO]:
             self._load_asr(model)
@@ -98,8 +112,10 @@ class SpeechTranscriber:
 
     def _load_align(self, lang_code: str) -> None:
         """
-        Loads an alignment model and stores it in the cache.
+        Loads an alignment model and stores it in the cache, evicting the least recently
+        used one first if the cache is full (so that peak memory never exceeds the limit).
         """
+        self._evict_align(keep=self._max_align_models - 1)
         log.debug("Loading align model", lang_code=lang_code)
         try:
             align_model, metadata = load_align_model(
@@ -112,6 +128,19 @@ class SpeechTranscriber:
         except Exception as e:
             log.error("Failed to load align model", lang_code=lang_code, error=str(e))
             raise e
+
+    def _evict_align(self, keep: int) -> None:
+        """
+        Drops the least recently used alignment models until at most ``keep`` remain.
+        """
+        evicted = False
+        while len(self.__align_cache) > keep:
+            lang_code, _ = self.__align_cache.popitem(last=False)
+            log.info("Evicted align model", lang_code=lang_code)
+            evicted = True
+        if evicted:
+            gc.collect()
+            self._clean_cuda()
 
     def _load_diar(
         self, model_name: str = "pyannote/speaker-diarization-3.1"
@@ -150,6 +179,7 @@ class SpeechTranscriber:
         """
         if lang_code not in self.__align_cache:
             self._load_align(lang_code=lang_code)
+        self.__align_cache.move_to_end(lang_code)
         return self.__align_cache[lang_code]
 
     def _get_diar(
@@ -220,7 +250,11 @@ class SpeechTranscriber:
     ) -> AlignedTranscriptionResult | None:
         """
         Aligns the transcription segments with the audio using the alignment model.
+        Returns None (raw segments are kept) when whisperx has no align model for the language.
         """
+        if language not in DEFAULT_ALIGN_MODELS_TORCH and language not in DEFAULT_ALIGN_MODELS_HF:
+            log.info("No align model for language, skipping alignment", language=language)
+            return None
         try:
             align_model, metadata = self._get_align(language)
             return align(

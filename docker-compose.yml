@@ -25,6 +25,8 @@ x-app: &app
     BATCH_SIZE: ${BATCH_SIZE:-8}
     # Size of each chunk in seconds for audio processing (maximum val is 30)
     CHUNK_SIZE: ${CHUNK_SIZE:-30}
+    # Max alignment models kept in memory at once (least recently used is evicted)
+    MAX_ALIGN_MODELS: ${MAX_ALIGN_MODELS:-2}
     MAX_UPLOAD_SIZE_BYTES: ${MAX_UPLOAD_SIZE_BYTES:-1073741824}
     TASK_TIME_LIMIT: ${TASK_TIME_LIMIT:-300}
     TASK_RESULT_EXPIRES: ${TASK_RESULT_EXPIRES:-3600}

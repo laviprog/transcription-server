@@ -28,6 +28,7 @@ def get_transcriber(
                     init_asr_models=list(preload or []),
                     batch_size=settings.BATCH_SIZE,
                     chunk_size=settings.CHUNK_SIZE,
+                    max_align_models=settings.MAX_ALIGN_MODELS,
                     hf_token=settings.HF_TOKEN,
                 )
     return _TRANSCRIBER
