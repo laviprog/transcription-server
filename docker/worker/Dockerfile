@@ -34,7 +34,7 @@ RUN mkdir -p ${DOWNLOAD_ROOT} ${TMP_DIR} && chown -R app:app /app ${DOWNLOAD_ROO
 USER app
 
 HEALTHCHECK --interval=30s --timeout=20s --start-period=600s --retries=3 \
-    CMD celery -A src.workers.app:celery_app inspect ping --timeout=15 -d "celery@$(hostname)" || exit 1
+    CMD celery -A transcription_server.worker.app:celery_app inspect ping --timeout=15 -d "celery@$(hostname)" || exit 1
 
-CMD ["celery", "-A", "src.workers.app:celery_app", "worker", \
+CMD ["celery", "-A", "transcription_server.worker.app:celery_app", "worker", \
      "--concurrency=1", "--without-gossip", "--without-mingle"]
