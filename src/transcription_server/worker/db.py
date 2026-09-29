@@ -7,6 +7,7 @@ import structlog
 from sqlalchemy import create_engine, select, update
 from sqlalchemy.orm import sessionmaker
 
+import transcription_server.domain.metadata  # noqa: F401  (registers all ORM models)
 from transcription_server.core.config import settings
 from transcription_server.domain.transcription.models import (
     Status,

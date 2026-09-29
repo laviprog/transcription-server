@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from scalar_fastapi import Theme, add_scalar_reference
 
+import transcription_server.domain.metadata  # noqa: F401
 from transcription_server.api.exceptions.handlers import setup_exception_handlers
 from transcription_server.api.exceptions.responses import error_responses
 from transcription_server.api.lifecycle import lifespan
