@@ -89,7 +89,7 @@ class SpeechTranscriber:
         for lang in _PRELOAD_ALIGN_LANGUAGES[-self._max_align_models :]:
             self._load_align(lang_code=lang.value)
         self._load_diar()
-        for model in asr_models or [Model.TURBO]:
+        for model in asr_models or [Model.LARGE_V3]:
             self._load_asr(model)
 
     def _load_asr(self, model_name: Model) -> None:

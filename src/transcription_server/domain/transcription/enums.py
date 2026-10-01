@@ -19,6 +19,6 @@ class Language(BaseEnum):
 
 
 class Model(BaseEnum):
-    SMALL = "small"
-    TURBO = "turbo"
-    # LARGE_V3_TURBO = "large-v3-turbo"
+    # SMALL = "small"
+    # TURBO = "turbo"
+    LARGE_V3 = "large-v3"
