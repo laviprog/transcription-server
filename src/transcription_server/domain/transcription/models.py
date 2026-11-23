@@ -6,7 +6,7 @@ from uuid import UUID
 
 from advanced_alchemy.types import DateTimeUTC
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import ForeignKey
+from sqlalchemy import ForeignKey, String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -36,10 +36,8 @@ class TranscriptionTaskModel(BaseModel):
     )
     message: Mapped[str | None]
 
-    model: Mapped[Model] = mapped_column(SQLEnum(Model, name="transcription_model"))
-    language: Mapped[Language | None] = mapped_column(
-        SQLEnum(Language, name="transcription_language")
-    )
+    model: Mapped[Model] = mapped_column(String, nullable=False)
+    language: Mapped[Language | None] = mapped_column(String, nullable=True)
     recognition_mode: Mapped[bool] = mapped_column(default=False)
     num_speakers: Mapped[int | None]
     align_mode: Mapped[bool | None] = mapped_column(default=False)

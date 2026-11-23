@@ -34,12 +34,13 @@ class Settings(BaseSettings):
     DOWNLOAD_ROOT: str = "/data/models"
     BATCH_SIZE: int = 8
     CHUNK_SIZE: int = 30
+    MAX_ALIGN_MODELS: int = 2
 
     TMP_DIR: str = "/data/tmp"
 
     HF_TOKEN: str | None = None  # Hugging Face token for diarization models
 
-    CORS_ORIGINS: str = ""
+    CORS_ORIGINS: str = "*"
 
     @property
     def IS_DEV(self) -> bool:

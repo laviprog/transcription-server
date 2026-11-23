@@ -30,7 +30,8 @@ COPY src ./src
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --extra worker
 
-RUN mkdir -p ${DOWNLOAD_ROOT} ${TMP_DIR} && chown -R app:app /app ${DOWNLOAD_ROOT} ${TMP_DIR}
+RUN mkdir -p ${DOWNLOAD_ROOT} ${TMP_DIR} ${HF_HOME} ${TORCH_HOME} \
+    && chown -R app:app /app ${DOWNLOAD_ROOT} ${TMP_DIR} ${HF_HOME} ${TORCH_HOME}
 USER app
 
 HEALTHCHECK --interval=30s --timeout=20s --start-period=600s --retries=3 \

@@ -67,7 +67,7 @@ async def transcribe(
     ] = None,
     model: Annotated[
         Model, Form(description="Transcription model to use (recommend turbo)")
-    ] = Model.TURBO,
+    ] = Model.LARGE_V3,
     recognition_mode: Annotated[bool, Form(description="Enable speaker detection")] = False,
     num_speakers: Annotated[
         int | None, Form(ge=1, le=15, description="Number of speakers for diarization")
