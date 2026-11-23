@@ -25,7 +25,7 @@ def _proc_init(**_):
 
     log.info("Initializing resources...")
     init_db_sync()
-    get_transcriber(preload=[Model.TURBO])
+    get_transcriber(preload=[Model.LARGE_V3])
     log.info("Initialization complete")
 
 

@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import ParamSpec, TypeVar
 
 import structlog
+from celery.exceptions import SoftTimeLimitExceeded
 
 log = structlog.get_logger(__name__)
 
@@ -91,6 +92,8 @@ def retry(
             for attempt in range(1, attempts + 1):
                 try:
                     return func(*args, **kwargs)
+                except SoftTimeLimitExceeded:
+                    raise
                 except exceptions as e:
                     if attempt == attempts:
                         log.error(

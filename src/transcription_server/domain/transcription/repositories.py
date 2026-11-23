@@ -2,7 +2,10 @@ from advanced_alchemy.repository import SQLAlchemyAsyncRepository
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from .models import TranscriptionResultModel, TranscriptionTaskModel
+from transcription_server.domain.transcription.models import (
+    TranscriptionResultModel,
+    TranscriptionTaskModel,
+)
 
 
 class TranscriptionTaskRepository(SQLAlchemyAsyncRepository[TranscriptionTaskModel]):

@@ -7,7 +7,7 @@ from transcription_server.api.api_keys.dependencies import ApiKeyServiceDep
 
 
 async def verify_api_key(
-    api_key_service: ApiKeyServiceDep, authorization: str = Header(...)
+    api_key_service: ApiKeyServiceDep, authorization: str | None = Header(None)
 ) -> UUID:
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(

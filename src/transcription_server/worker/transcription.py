@@ -1,31 +1,32 @@
+from __future__ import annotations
+
 import gc
-from typing import TYPE_CHECKING, NotRequired, cast
+from collections import OrderedDict
+from typing import TYPE_CHECKING, Any, cast
 
 import structlog
 import torch
-from whisperx.alignment import align, load_align_model
+from whisperx.alignment import (
+    DEFAULT_ALIGN_MODELS_HF,
+    DEFAULT_ALIGN_MODELS_TORCH,
+    align,
+    load_align_model,
+)
 from whisperx.asr import FasterWhisperPipeline, load_model
 from whisperx.audio import load_audio
 from whisperx.diarize import DiarizationPipeline, assign_word_speakers
 from whisperx.schema import AlignedTranscriptionResult, SingleSegment, TranscriptionResult
 
 from transcription_server.core.utils import retry
-from transcription_server.domain.transcription.enums import Language, Model
 
 log = structlog.get_logger(__name__)
 
 if TYPE_CHECKING:
     from numpy import ndarray
     from pandas import DataFrame
+    from transformers import Wav2Vec2ForCTC
 
-
-class Segment(SingleSegment):
-    """
-    A transcription segment as it leaves the pipeline: whisperx adds the ``speaker``
-    key during diarization, so it is absent unless recognition mode was requested.
-    """
-
-    speaker: NotRequired[str]
+    from transcription_server.worker.schema import Segment
 
 
 class SpeechTranscriber:
@@ -40,7 +41,7 @@ class SpeechTranscriber:
         download_root: str,
         batch_size: int,
         chunk_size: int,
-        init_asr_models: list[Model] | None = None,
+        max_align_models: int = 2,
         hf_token: str | None = None,
     ):
         """
@@ -50,120 +51,128 @@ class SpeechTranscriber:
         :param device: Device to use for inference ("cpu" or "cuda").
         :param compute_type: Compute type for inference (e.g., "float16", "int8").
         :param download_root: Directory for downloading and caching models.
-        :param init_asr_models: Optional list of asr models to preload at startup.
         :param batch_size: Batch size for inference.
         :param chunk_size: Chunk size (in seconds) for audio splitting.
+        :param max_align_models: Maximum number of alignment models kept in memory.
         :param hf_token: Optional Hugging Face token for private diarization model access.
         """
-        self.__asr_cache: dict[str, FasterWhisperPipeline] = {}
-        self.__align_cache: dict[str, tuple] = {}
-        self.__diar_cache: DiarizationPipeline | None = None
+        self.__asr_models_cache: dict[str, FasterWhisperPipeline] = {}
+        self.__alignment_models_cache: OrderedDict[str, tuple[Wav2Vec2ForCTC, dict[str, Any]]] = (
+            OrderedDict()
+        )
+        self.__diarization_model: DiarizationPipeline | None = None
 
         self._device = device
         self._compute_type = compute_type
         self._download_root = download_root
         self._batch_size = batch_size
         self._chunk_size = chunk_size
+        self._max_align_models = max_align_models
         self._hf_token = hf_token
 
-        self._load_models(init_asr_models)
-
-    def _load_models(self, asr_models: list[Model] | None) -> None:
+    def preload_models(
+        self, asr_models: list[str] | None = None, align_models: list[str] | None = None
+    ) -> None:
         """
-        Preloads specified ASR models into cache.
-        """
-        for lang in Language.values():
-            self._load_align(lang_code=lang)
-        self._load_diar()
-        for model in asr_models or [Model.TURBO]:
-            self._load_asr(model)
+        Preload models into cache.
 
-    def _load_asr(self, model_name: Model) -> None:
+        :param asr_models: List of ASR model names to preload.
+        :param align_models: List of language codes for alignment models to preload.
+        """
+        for model in asr_models or []:
+            self._load_asr_model(model)
+        for lang_code in align_models or []:
+            self._load_alignment_model(lang_code)
+
+    def _load_asr_model(self, model_name: str) -> None:
         """
         Loads an ASR model and stores it in the cache.
         """
-        model = model_name.value
-        log.debug("Loading ASR model", model_name=model)
+        log.info("Loading ASR model", model_name=model_name)
         try:
-            self.__asr_cache[model] = load_model(
-                whisper_arch=model,
+            self.__asr_models_cache[model_name] = load_model(
+                whisper_arch=model_name,
                 device=self._device,
                 compute_type=self._compute_type,
                 download_root=self._download_root,
             )
-            log.debug("Loaded ASR model", model_name=model)
+            log.info("ASR model loaded", model_name=model_name)
         except Exception as e:
-            log.error("Failed to load ASR model", model_name=model, error=str(e))
+            log.error("Failed to load ASR model", model_name=model_name, error=str(e))
             raise e
 
-    def _load_align(self, lang_code: str) -> None:
+    def _load_alignment_model(self, lang_code: str) -> None:
         """
         Loads an alignment model and stores it in the cache.
         """
-        log.debug("Loading align model", lang_code=lang_code)
+        self._evict_alignment_models(keep=self._max_align_models - 1)
+        log.info("Loading alignment model", lang_code=lang_code)
         try:
-            align_model, metadata = load_align_model(
+            self.__alignment_models_cache[lang_code] = load_align_model(
                 language_code=lang_code,
                 device=self._device,
                 model_dir=self._download_root,
             )
-            self.__align_cache[lang_code] = (align_model, metadata)
-            log.debug("Align model loaded", lang_code=lang_code)
+            log.info("Alignment model loaded", lang_code=lang_code)
         except Exception as e:
-            log.error("Failed to load align model", lang_code=lang_code, error=str(e))
+            log.error("Failed to load alignment model", lang_code=lang_code, error=str(e))
             raise e
 
-    def _load_diar(
-        self, model_name: str = "pyannote/speaker-diarization-3.1"
-    ) -> DiarizationPipeline:
+    def _evict_alignment_models(self, keep: int) -> None:
+        evicted = False
+        while len(self.__alignment_models_cache) > keep:
+            lang_code, _ = self.__alignment_models_cache.popitem(last=False)
+            log.info("Evicted align model", lang_code=lang_code)
+            evicted = True
+        if evicted:
+            gc.collect()
+            self._clean_cuda()
+
+    def _load_diarization_model(self, model_name: str | None = None) -> None:
         """
         Loads a diarization model and stores it in the cache.
         """
-        if not self._hf_token:
-            raise RuntimeError("HuggingFace token is required for diarization")
-        log.debug("Loading diarization pipeline...", model_name=model_name)
+        log.info("Loading diarization model...", model_name=model_name)
         try:
-            self.__diar_cache = DiarizationPipeline(
+            self.__diarization_model = DiarizationPipeline(
                 model_name=model_name,
                 token=self._hf_token,
                 device=self._device,
+                cache_dir=self._download_root,
             )
-            log.debug("Diarization pipeline loaded", model_name=model_name)
+            log.info("Diarization model loaded", model_name=model_name)
         except Exception as e:
-            log.error("Failed to load diarization pipeline", model_name=model_name, error=str(e))
+            log.error("Failed to load diarization model", model_name=model_name, error=str(e))
             raise e
 
-        return self.__diar_cache
-
-    def _get_asr(self, model: Model) -> FasterWhisperPipeline:
+    def _get_asr_model(self, model_name: str) -> FasterWhisperPipeline:
         """
         Retrieves the ASR model from cache or loads it if not present.
         """
-        if model.value not in self.__asr_cache:
-            self._load_asr(model)
-        return self.__asr_cache[model.value]
+        if model_name not in self.__asr_models_cache:
+            self._load_asr_model(model_name=model_name)
+        return self.__asr_models_cache[model_name]
 
-    def _get_align(self, lang_code: str):
+    def _get_alignment_model(self, lang_code: str) -> tuple[Wav2Vec2ForCTC, dict[str, Any]]:
         """
         Retrieves the alignment model for the specified language code from cache or loads it
         if not present.
         """
-        if lang_code not in self.__align_cache:
-            self._load_align(lang_code=lang_code)
-        return self.__align_cache[lang_code]
+        if lang_code not in self.__alignment_models_cache:
+            self._load_alignment_model(lang_code=lang_code)
+        self.__alignment_models_cache.move_to_end(lang_code)
+        return self.__alignment_models_cache[lang_code]
 
-    def _get_diar(
-        self, model_name: str = "pyannote/speaker-diarization-3.1"
-    ) -> DiarizationPipeline:
+    def _get_diarization_model(self, model_name: str | None = None) -> DiarizationPipeline:
         """
         Retrieves the diarization model from cache or loads it if not present.
         """
-        if self.__diar_cache is None:
-            return self._load_diar(model_name)
-        return self.__diar_cache
+        if self.__diarization_model is None:
+            self._load_diarization_model(model_name=model_name)
+        return cast("DiarizationPipeline", self.__diarization_model)
 
     @staticmethod
-    def _load_audio(audio_file: str) -> "ndarray":
+    def _load_audio(audio_file: str) -> ndarray:
         """
         Loads audio file into a numpy array.
         """
@@ -179,31 +188,31 @@ class SpeechTranscriber:
     @retry()
     def _transcribe(
         self,
-        audio: "ndarray",
+        audio: ndarray,
         audio_file: str,
-        model: Model,
-        language: Language | None,
+        model: str,
+        language: str | None = None,
     ) -> TranscriptionResult:
         """
         Transcribes the given audio using the specified ASR model and language.
         """
-        asr = self._get_asr(model)
+        asr = self._get_asr_model(model_name=model)
 
         log.debug(
             "Transcribing...",
-            model=model.value,
-            language=language.value if language else None,
+            model=model,
+            language=language,
             batch_size=self._batch_size,
-            chuck_size=self._chunk_size,
+            chunk_size=self._chunk_size,
         )
         try:
             result = asr.transcribe(
                 audio=audio,
-                language=language.value if language else None,
+                language=language,
                 batch_size=self._batch_size,
                 chunk_size=self._chunk_size,
             )
-            log.debug("Transcribed audio file %s", audio_file)
+            log.debug("Transcribed audio file", audio_file=audio_file)
         except RuntimeError as e:
             log.error("Transcription runtime error", audio_file=audio_file, error=str(e))
             self.clean()
@@ -216,13 +225,16 @@ class SpeechTranscriber:
 
     @retry()
     def _align(
-        self, segments: list[SingleSegment], audio: "ndarray", language: str
+        self, segments: list[SingleSegment], audio: ndarray, language: str
     ) -> AlignedTranscriptionResult | None:
         """
-        Aligns the transcription segments with the audio using the alignment model.
+        Align the transcription segments with the audio using the alignment model.
         """
+        if language not in DEFAULT_ALIGN_MODELS_TORCH and language not in DEFAULT_ALIGN_MODELS_HF:
+            log.info("No align model for language, skipping alignment", language=language)
+            return None
         try:
-            align_model, metadata = self._get_align(language)
+            align_model, metadata = self._get_alignment_model(language)
             return align(
                 segments,
                 align_model,
@@ -240,45 +252,43 @@ class SpeechTranscriber:
 
     @retry()
     def _diarize(
-        self, transcription_result: TranscriptionResult, audio: "ndarray", num_speakers: int | None
+        self,
+        transcription_result: TranscriptionResult,
+        audio: ndarray,
+        num_speakers: int | None = None,
     ) -> TranscriptionResult:
         """
         Performs speaker diarization and assigns speakers to transcription segments.
-
-        A ``num_speakers`` of None lets the pipeline infer the speaker count itself.
         """
-        diarization_model = self._get_diar()
+        diarization_model = self._get_diarization_model()
         log.debug(
-            "Running diarization",
+            "Running diarization pipeline",
             num_speakers=num_speakers,
         )
         try:
-            diar_output = diarization_model(audio, num_speakers=num_speakers)
-            # Without return_embeddings the pipeline yields the dataframe alone, but its
-            # signature covers both shapes.
-            diar_segments: DataFrame = (
-                diar_output[0] if isinstance(diar_output, tuple) else diar_output
+            diarization_result = diarization_model(audio, num_speakers=num_speakers)
+            diarization_segments: DataFrame = (
+                diarization_result[0]
+                if isinstance(diarization_result, tuple)
+                else diarization_result
             )
-            # The speakers are assigned in place, so the result keeps the shape it was given.
-            result = cast(
+            return cast(
                 "TranscriptionResult",
-                assign_word_speakers(diar_segments, transcription_result),
+                assign_word_speakers(diarization_segments, transcription_result),
             )
-            self._clean_cuda()
-            return result
         except RuntimeError as e:
             log.warning("Diarization failed", error=str(e))
             self.clean()
             raise e
         except Exception as e:
             log.warning("Diarization failed", error=str(e))
-            return transcription_result
+            raise
 
     def transcribe(
         self,
         audio_file: str,
-        model: Model,
-        language: Language | None,
+        model: str,
+        language: str | None,
         recognition_mode: bool,
         num_speakers: int | None,
         align_mode: bool,
@@ -325,9 +335,9 @@ class SpeechTranscriber:
         Cleans up cached models and frees memory.
         """
         log.debug("Cleaning up resources...")
-        self.__asr_cache.clear()
-        self.__align_cache.clear()
-        self.__diar_cache = None
+        self.__asr_models_cache.clear()
+        self.__alignment_models_cache.clear()
+        self.__diarization_model = None
         gc.collect()
         self._clean_cuda()
         log.debug("Cleanup complete")

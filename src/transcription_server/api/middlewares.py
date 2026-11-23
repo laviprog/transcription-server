@@ -2,13 +2,16 @@ import time
 import uuid
 
 import structlog
-from starlette.middleware.base import BaseHTTPMiddleware
+from fastapi.middleware.cors import CORSMiddleware
+
+from transcription_server.core.config import settings
 
 log = structlog.get_logger(__name__)
 
 
-class LogMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request, call_next):
+def register_middlewares(app):
+    @app.middleware("http")
+    async def log_middleware(request, call_next):
         correlation_id = request.headers.get("X-Request-Id") or str(uuid.uuid4())
         ip = request.headers.get("X-Forwarded-For", "").split(",")[0].strip() or (
             request.client.host if request.client else None
@@ -45,3 +48,11 @@ class LogMiddleware(BaseHTTPMiddleware):
             structlog.contextvars.unbind_contextvars(
                 "correlation_id", "method", "path", "ip_address"
             )
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.CORS_ORIGINS_LIST,
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "DELETE"],
+        allow_headers=["*"],
+    )
